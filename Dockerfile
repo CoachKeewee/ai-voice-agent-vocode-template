@@ -1,29 +1,40 @@
 FROM python:3.9-bullseye
 
-# get portaudio and ffmpeg
-RUN apt-get update \
-        && apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev -y
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get install -y ffmpeg
+# Force APT to use IPv4 to avoid Debian IPv6 network issues
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 
+# Update and install required system packages in a single layer
+RUN apt-get update && \
+    apt-get install -y \
+        libportaudio2 \
+        libportaudiocpp0 \
+        portaudio19-dev \
+        libasound-dev \
+        libsndfile1-dev \
+        ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the working directory
 WORKDIR /code
-COPY ./pyproject.toml /code/pyproject.toml
-COPY ./poetry.lock /code/poetry.lock
-RUN pip install --no-cache-dir --upgrade poetry
+
+# Copy dependency files first for layer caching
+COPY ./pyproject.toml ./poetry.lock ./
+
+# Install Poetry and dependencies
+RUN pip install --no-cache-dir --upgrade poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-dev --no-interaction --no-ansi
+
+# Install direct non-poetry deps
 RUN pip install httpx
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-dev --no-interaction --no-ansi
-COPY main.py /code/main.py
-COPY speller_agent.py /code/speller_agent.py
-COPY memory_config.py /code/memory_config.py
-COPY events_manager.py /code/events_manager.py
-COPY config.py /code/config.py
-COPY instructions.txt /code/instructions.txt
-RUN mkdir -p /code/call_transcripts
-RUN mkdir -p /code/db
 
-# Copy the utils directory (and its contents) into the container
-COPY ./utils /code/utils
+# Copy application code
+COPY main.py speller_agent.py memory_config.py events_manager.py config.py instructions.txt ./
+COPY ./utils ./utils
 
+# Create persistent directories
+RUN mkdir -p /code/call_transcripts /code/db
+
+# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000"]
