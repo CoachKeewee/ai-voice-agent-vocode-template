@@ -32,7 +32,8 @@ RUN pip install --no-cache-dir --upgrade poetry
 RUN poetry config virtualenvs.create false
 
 # Install Python dependencies (no --without or --no-dev flags since no dev dependencies defined)
-RUN poetry install --no-interaction --no-ansi -vvv > poetry_install.log 2>&1 || (cat poetry_install.log && false)
+RUN poetry install --no-root --no-interaction --no-ansi -vvv > poetry_install.log 2>&1 || (cat poetry_install.log && false)
+
 
 # Install httpx if needed
 RUN pip install httpx
